@@ -1,88 +1,100 @@
-import os
 import re
-import requests
+import os
+import httpx
 from dotenv import load_dotenv
-from rich.console import Console
+from textual.app import App, ComposeResult
+from textual.containers import ScrollableContainer
+from textual.widgets import Header, Footer, Static
+from textual.widgets import RichLog
 from rich.markdown import Markdown
 from html import unescape
+from typing import ClassVar
 
 # Load environment variables
 load_dotenv()
-
 SNAC_HOST = os.getenv("SNAC_HOST")
 API_TOKEN = os.getenv("API_TOKEN")
 
-console = Console()
+class SnacClient(App):
+    # Define TITLE as a class variable
+    TITLE: ClassVar[str] = "welcome to linuxusers.in"
+    CSS_PATH: ClassVar[str] = "snac.tcss"
 
-# Ensure credentials exist
-if not SNAC_HOST or not API_TOKEN:
-    console.print("[red]Error: Missing SNAC_HOST or API_TOKEN in .env file.[/red]")
-    exit(1)
+   
 
-def post_status(content):
-    """Post a new status to SNAC."""
-    url = f"{SNAC_HOST}/api/v1/statuses"
-    headers = {"Authorization": f"Bearer {API_TOKEN}"}
-    data = {"status": content}
+    def compose(self) -> ComposeResult:
+        yield Static(self.TITLE, id="title")
+        yield Header()
+        self.content = ScrollableContainer()
+        yield self.content
+        yield Footer()
 
-    try:
-        response = requests.post(url, headers=headers, data=data, timeout=10)
-        response.raise_for_status()
-        console.print("[green]Post successful![/green]")
-    except requests.exceptions.RequestException as e:
-        console.print(f"[red]Error posting status: {e}[/red]")
+    async def on_mount(self) -> None:
+        await self.fetch_timeline()
 
-def fetch_posts():
-    """Fetch recent posts from the SNAC timeline."""
-    # this end point fetches all the post of users
-    # url = f"{SNAC_HOST}/api/v1/timelines/public"
+    async def fetch_timeline(self):
+        url = f"{SNAC_HOST}/api/v1/timelines/home"
+        headers = {"Authorization": f"Bearer {API_TOKEN}"}
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                posts = response.json()
+                for post in posts:
+                    username = f"[bold green]@[/][bright_green]{post['account']['display_name']}[/bright_green]"
+                    raw_content = post['content']
+                    content = unescape(re.sub(r"<.*?>", "", raw_content)).strip()
+                    # Wrap the post in a box with hackeristic formatting
+                    post_widget = Static(
+                        f"{username}\n\n[green]{content}[/green]",
+                        classes="hacker-box"
+                    )
+                    self.content.mount(post_widget)
+        except httpx.HTTPError as e:
+            self.content.mount(Static(f"[red]ERROR: {e}[/red]", classes="error"))
 
-    #this is for posts from the people a user follows
 
-    url = f"{SNAC_HOST}/api/v1/timelines/home"
-    headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
-    try:
-        console.print("[yellow]Fetching posts...[/yellow]")
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        posts = response.json()
-        
-        if not posts:
-            console.print("[red]No posts found.[/red]")
-        return posts
+#     async def fetch_timeline(self):
+#         url = f"{SNAC_HOST}/api/v1/timelines/home"
+#         headers = {"Authorization": f"Bearer {API_TOKEN}"}
+#         try:
+#             async with httpx.AsyncClient(timeout=20) as client:
+#                 response = await client.get(url, headers=headers)
+#                 response.raise_for_status()
+#                 posts = response.json()
+#                 for post in posts:
+#                     username = f"[bold cyan]@{post['account']['display_name']}[/bold cyan]"
+#                     raw_content = post['content']
+#                     content = unescape(re.sub(r"<.*?>", "", raw_content)).strip()
+#                 # Wrap the post in a box with custom formatting
+#                     post_widget = Static(
+#                     f"{username}\n\n[white]{content}[/white]",
+#                     classes="post-box"
+#                     )
+#                     self.content.mount(post_widget)
+#         except httpx.HTTPError as e:
+#             self.content.mount(Static(f"Error fetching posts: {e}", classes="error"))
 
-    except requests.exceptions.RequestException as e:
-        console.print(f"[red]Error fetching posts: {e}[/red]")
-        return []
 
-def format_post(post):
-    """Extract relevant fields and clean up content."""
-    account = post.get("account", {})
-    display_name = account.get("display_name", account.get("acct", "Unknown user"))
-    created_at = post.get("created_at", "Unknown time")
-    raw_content = post.get("content", "")
 
-    # Remove HTML tags from content
-    clean_content = unescape(re.sub(r"<.*?>", "", raw_content)).strip()
+# this officially works. if things fail and i dont know i can restart from here
+#     async def fetch_timeline(self):
+#         url = f"{SNAC_HOST}/api/v1/timelines/home"        
+#         headers = {"Authorization": f"Bearer {API_TOKEN}"}
+#         try:
+#             async with httpx.AsyncClient(timeout=20) as client:
+#                 response = await client.get(url, headers=headers)
+#                 response.raise_for_status()
+#                 posts = response.json()
+#                 for post in posts:
+#                     username = f"[bold]{post['account']['display_name']}[/bold]"
+#                     raw_content = post['content']
+#                     content = unescape(re.sub(r"<.*?>", "", raw_content)).strip()
+#                     self.content.mount(Static(f"{username}\n{content}", classes="post"))
+#         except httpx.HTTPError as e:
+#             self.content.mount(Static(f"Error fetching posts: {e}", classes="error"))
 
-    if not clean_content:
-        clean_content = "(No text content)"
-
-    return f"**@{display_name}**\n\n{clean_content}\n\n*Posted at: {created_at}*\n"
-
-def display_posts():
-    """Fetch and display posts in a formatted way."""
-    posts = fetch_posts()
-    
-    if not posts:
-        return
-
-    for post in posts:
-        formatted_post = format_post(post)
-        console.print(Markdown(formatted_post))
-        console.print("-" * 40)
-
-# Run it
-display_posts()
+if __name__ == "__main__":
+    SnacClient().run()
 

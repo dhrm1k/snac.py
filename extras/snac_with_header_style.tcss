@@ -1,0 +1,52 @@
+/* Global hackeristic theme */
+Screen {
+    color: green;
+    text-style: bold;
+}
+
+/* Styling for the hacker box */
+.hacker-box {
+    border: solid green;
+    border-title-align: center;
+    padding: 1;
+    margin: 1;
+    width: 100%;
+    background: black;
+}
+
+/* Username styling */
+.hacker-box Static {
+    color: ansi_bright_green;
+}
+
+/* Post content styling */
+.hacker-box Static Markdown {
+    color: green;
+}
+
+/* Error message styling */
+.error {
+    color: red;
+    text-style: bold;
+    background: black;
+}
+
+/* Header styling */
+Header {
+    background: black;
+    color: ansi_bright_green;
+    text-style: bold;
+    border-bottom: solid green;
+    height: 3; /* Ensure the header has enough height */
+    padding: 1; /* Add padding to ensure the title is visible */
+    text-align: center; /* Center the title text */
+}
+
+/* Footer styling */
+Footer {
+    background: black;
+    color: green;
+    text-style: bold;
+    border-top: solid green;
+}
+
